@@ -3,9 +3,9 @@
 
 int main(int argc, char *argv[]) {
     // Define flags
-    Flag *flagName = flag_string("--name", "World", "Name to greet");
-    Flag *flagVerbose = flag_bool("--verbose", 0, "Enable verbose output");
-    Flag *flagCount = flag_int("--count", 1, "Number of greetings");
+    Flag *flagName = flag_string("World", "Name to greet", "--name");
+    Flag *flagVerbose = flag_bool(0, "Enable verbose output", "--verbose");
+    Flag *flagCount = flag_int_multi(1, "Number of greetings", "--count", "-c", NULL);
 
     // Parse command line flags
     if (flag_parse(argc, argv) != 0) {

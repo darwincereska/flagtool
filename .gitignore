@@ -1,2 +1,5 @@
 *.o
 *.a
+.DS_STORE
+example
+test_flagtool
