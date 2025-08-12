@@ -1,3 +1,11 @@
+/* 
+ * 
+ * FLAG TOOL MADE BY @darwincereska on GitHub 
+ * VERSON 1.0.0
+ * https://github.com/darwincereska/flagtool
+ * 
+ */
+
 #include "flagtool.h"
 #include <stdio.h>
 #include <stdlib.h>
