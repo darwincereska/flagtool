@@ -143,47 +143,92 @@ Flag *flag_int_multi(int default_val, const char *help, ...) {
     return f;
 }
 
+/**
+ * flag_parse - Parses command-line arguments and updates registered flags.
+ * 
+ * Supported formats:
+ *   --flag                // for booleans
+ *   --flag=value          // value assignment in same argument
+ *   --flag value          // value assignment in next argument
+ * 
+ * Behavior:
+ *   - Matches against all registered flag names.
+ *   - Updates the flag's value based on its type (bool, int, string).
+ *   - Prints an error and returns non-zero for unknown flags or bad values.
+ * 
+ * @argc: Argument count from main().
+ * @argv: Argument vector from main().
+ * 
+ * Returns:
+ *   0 on success
+ *   non-zero on error
+ */
+ 
 int flag_parse(int argc, char *argv[]) {
     for (int i = 1; i < argc; i++) {
+        char *arg = argv[i];
+        char *value_from_equal = NULL;
+        
+        // Check for --flag=value form
+        char *eq = strchr(arg, '=');
+        if (eq) {
+            *eq = '\0';
+            value_from_equal = eq + 1;
+        }
+        
         int matched = 0;
         for (int j = 0; j < flag_count; j++) {
             Flag *f = flags[j];
             for (int n = 0; n < f->name_count; n++) {
                 if (strcmp(argv[i], f->names[n]) == 0) {
                     matched = 1;
+                    
+                    // Boolean flag: sets to true
                     if (f->type == TYPE_BOOL) {
                         f->value_bool = 1;
                         f->is_set = 1;
-                    } else {
+                        break;
+                    }
+                    
+                    // Get the value (either from --flag=value or next arg)
+                    const char *val = value_from_equal;
+                    if (!val) {
                         if (i + 1 >= argc) {
                             fprintf(stderr, "Missing value for flag %s\n", f->names[0]);
                             return 1;
                         }
-                        char *val = argv[++i];
-                        if (f->type == TYPE_STRING) {
-                            free(f->value_str);
-                            f->value_str = strdup(val);
-                            if (!f->value_str) {
-                                perror("strdup");
-                                return 1;
-                            }
-                            f->is_set = 1;
-                        } else if (f->type == TYPE_INT) {
-                            char *endptr;
-                            long v = strtol(val, &endptr, 10);
-                            if (*endptr != '\0') {
-                                fprintf(stderr, "Invalid integer for flag %s: %s\n", f->names[0], val);
-                                return 1;
-                            }
-                            f->value_int = (int)v;
-                            f->is_set = 1;
+                        val = argv[++i];
+                    }
+                    
+                    // Assign based on type
+                    if (f->type == TYPE_STRING) {
+                        free(f->value_str);
+                        f->value_str = strdup(val);
+                        if (!f->value_str) {
+                            perror("strdup");
+                            return 1;
                         }
+                        f->is_set = 1;
+                    } else if (f->type == TYPE_INT) {
+                        char *endptr;
+                        long v = strtol(val, &endptr, 10);
+                        if (*endptr != '\0') {
+                            fprintf(stderr, "Invalid integer for flag %s: %s\n", f->names[0], val);
+                            return 1;
+                        }
+                        f->value_int = (int)v;
+                        f->is_set = 1;
                     }
                     break;
                 }
             }
             if (matched) break;
         }
+        
+        // Restore '=' if it was modified
+        if (eq) *eq = '=';
+        
+        // Unknown flag handler
         if (!matched) {
             fprintf(stderr, "Unknown flag: %s\n", argv[i]);
             return 1;
