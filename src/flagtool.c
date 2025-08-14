@@ -1,9 +1,9 @@
-/* 
- * 
- * FLAG TOOL MADE BY @darwincereska on GitHub 
- * VERSON 1.0.0
+/*
+ *
+ * FLAG TOOL MADE BY @darwincereska on GitHub
+ * VERSON 1.0.1
  * https://github.com/darwincereska/flagtool
- * 
+ *
  */
 
 #include "flagtool.h"
@@ -143,49 +143,107 @@ Flag *flag_int_multi(int default_val, const char *help, ...) {
     return f;
 }
 
+/**
+ * flag_parse - Parses command-line arguments and updates registered flags.
+ *
+ * Supported formats:
+ *   --flag                // for booleans
+ *   --flag=value          // value assignment in same argument
+ *   --flag value          // value assignment in next argument
+ *
+ * Behavior:
+ *   - Matches against all registered flag names.
+ *   - Updates the flag's value based on its type (bool, int, string).
+ *   - Prints an error and returns non-zero for unknown flags or bad values.
+ *
+ * @argc: Argument count from main().
+ * @argv: Argument vector from main().
+ *
+ * Returns:
+ *   0 on success
+ *   non-zero on error
+ */
+
+static int set_flag_value(Flag *f, const char *val, int is_negative_bool) {
+    if (f->type == TYPE_BOOL) {
+        f->value_bool = is_negative_bool ? 0 : 1;
+        f->is_set = 1;
+        return 0;
+    }
+    if (!val) {
+        fprintf(stderr, "Missing value for flag %s\n", f->names[0]);
+        return 1;
+    }
+    if (f->type == TYPE_STRING) {
+        free(f->value_str);
+        f->value_str = strdup(val);
+        if (!f->value_str) {
+            perror("strdup");
+            return 1;
+        }
+        f->is_set = 1;
+    } else if (f->type == TYPE_INT) {
+        char *endptr;
+        long v = strtol(val, &endptr, 10);
+        if (*endptr != '\0') {
+            fprintf(stderr, "Invalid integer for flag %s: %s\n", f->names[0], val);
+            return 1;
+        }
+        f->value_int = (int)v;
+        f->is_set = 1;
+    }
+    return 0;
+}
+
 int flag_parse(int argc, char *argv[]) {
     for (int i = 1; i < argc; i++) {
+        const char *original_arg = argv[i];
+        char *value_from_equal = NULL;
+        int is_negative_bool = 0;
+
+        // Make a safe copy for matching
+        char argbuf[256];
+        strncpy(argbuf, original_arg, sizeof(argbuf) - 1);
+        argbuf[sizeof(argbuf) - 1] = '\0';
+
+        // Detect --no-flag for booleans
+        if (strncmp(argbuf, "--no-", 5) == 0) {
+            is_negative_bool = 1;
+            memmove(argbuf + 2, argbuf + 5, strlen(argbuf + 5) + 1); // remove "no-"
+        }
+
+        // Check for --flag=value form
+        char *eq = strchr(argbuf, '=');
+        if (eq) {
+            *eq = '\0';
+            value_from_equal = eq + 1;
+        }
+
         int matched = 0;
         for (int j = 0; j < flag_count; j++) {
             Flag *f = flags[j];
             for (int n = 0; n < f->name_count; n++) {
-                if (strcmp(argv[i], f->names[n]) == 0) {
+                if (strcmp(argbuf, f->names[n]) == 0) {
                     matched = 1;
-                    if (f->type == TYPE_BOOL) {
-                        f->value_bool = 1;
-                        f->is_set = 1;
-                    } else {
+                    const char *val = value_from_equal;
+                    if (!val && f->type != TYPE_BOOL) {
                         if (i + 1 >= argc) {
                             fprintf(stderr, "Missing value for flag %s\n", f->names[0]);
                             return 1;
                         }
-                        char *val = argv[++i];
-                        if (f->type == TYPE_STRING) {
-                            free(f->value_str);
-                            f->value_str = strdup(val);
-                            if (!f->value_str) {
-                                perror("strdup");
-                                return 1;
-                            }
-                            f->is_set = 1;
-                        } else if (f->type == TYPE_INT) {
-                            char *endptr;
-                            long v = strtol(val, &endptr, 10);
-                            if (*endptr != '\0') {
-                                fprintf(stderr, "Invalid integer for flag %s: %s\n", f->names[0], val);
-                                return 1;
-                            }
-                            f->value_int = (int)v;
-                            f->is_set = 1;
-                        }
+                        val = argv[++i];
+                    }
+                    if (set_flag_value(f, val, is_negative_bool) != 0) {
+                        return 1; // Error setting value
                     }
                     break;
                 }
             }
             if (matched) break;
         }
+
         if (!matched) {
-            fprintf(stderr, "Unknown flag: %s\n", argv[i]);
+            fprintf(stderr, "Unknown flag: %s\n", original_arg);
             return 1;
         }
     }
@@ -218,15 +276,15 @@ void print_flag_usage(const char *progname) {
             if (n + 1 < f->name_count) printf(", ");
         }
         switch (f->type) {
-            case TYPE_STRING:
-                printf(" <string>\t%s (default: %s)\n", f->help, f->default_str ? f->default_str : "none");
-                break;
-            case TYPE_BOOL:
-                printf("\t%s (default: %s)\n", f->help, f->default_bool ? "true" : "false");
-                break;
-            case TYPE_INT:
-                printf(" <int>\t%s (default: %d)\n", f->help, f->default_int);
-                break;
+        case TYPE_STRING:
+            printf(" <string>\t%s (default: %s)\n", f->help, f->default_str ? f->default_str : "none");
+            break;
+        case TYPE_BOOL:
+            printf("\t%s (default: %s)\n", f->help, f->default_bool ? "true" : "false");
+            break;
+        case TYPE_INT:
+            printf(" <int>\t%s (default: %d)\n", f->help, f->default_int);
+            break;
         }
     }
 }
