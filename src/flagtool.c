@@ -264,7 +264,7 @@ int flag_parse(int argc, char *argv[]) {
         }
 
         // Use the hash table to find the flag
-        Flag *f = find_flag(argbuf);
+        Flag *f = flag_find(argbuf);
         if (f) {
             const char *val = value_from_equal;
             if (!val && f->type != TYPE_BOOL) {
@@ -286,7 +286,7 @@ int flag_parse(int argc, char *argv[]) {
 }
 
 // Function to find a flag by name in the hash table
-Flag *find_flag(const char *name) {
+Flag *flag_find(const char *name) {
     unsigned int index = hash(name); // Compute index
     HashNode *node = hash_table[index]; // Get the head of the linked list
     while (node) { // Traverse the linked list
@@ -298,6 +298,35 @@ Flag *find_flag(const char *name) {
         node = node->next; // Move to the next node
     }
     return NULL; // Return NULL if not found
+}
+
+// Functions to free a flag from memory
+void flag_free(Flag *flag) {
+    if (flag) {
+        free(flag->value_str);
+        free(flag);
+    }
+}
+
+void flags_cleanup() {
+    for (int i = 0; i < flag_count; i++) {
+        flag_free(flags[i]);
+    }
+    flag_count = 0; // Reset the count
+    free_hash_table(); // Clear hash table
+}
+
+// Function to free hash table
+void free_hash_table() {
+    for (int i = 0; i < HASH_TABLE_SIZE; i++) {
+        HashNode *node = hash_table[i];
+        while (node) {
+            HashNode *temp = node;
+            node = node->next;
+            free(temp); // Free each node
+        }
+        hash_table[i] = NULL; // Clear the pointer
+    }
 }
 
 // Function to get the string value of a flag
