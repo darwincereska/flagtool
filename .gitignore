@@ -3,3 +3,4 @@
 .DS_STORE
 example
 test_flagtool
+compile_commands.json
