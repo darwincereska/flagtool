@@ -26,5 +26,8 @@ int main(int argc, char *argv[]) {
     printf("Debug: %s\n", flag_get_bool(flagDebug) ? "ON" : "OFF");
     printf("User: %s\n", flag_get_string(flagUser));
     printf("Retries: %d\n", flag_get_int(flagRetries));
+    
+    // Cleanup before exiting
+    flags_cleanup();
     return 0;
 }
