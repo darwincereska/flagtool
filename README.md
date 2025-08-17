@@ -10,6 +10,8 @@ A lightweight C library for parsing command-line flags with support for strings,
 - Supports string, boolean, and integer flag types
 - Automatic parsing and value retrieval
 - Usage help printing
+- Error handling for unknown flags and invalid values
+- Memory management functions for freeing flags and cleaning up resources
 
 ---
 
@@ -124,5 +126,16 @@ int main(int argc, char *argv[]) {
 
 - `make example` builds an example program using the library.
 - `make test` builds and runs tests.
+
+---
+
+## Memory Management
+
+- Use `flag_free(Flag *flag)` to free a flag from memory.
+- Call `flags_cleanup()` to free all registered flags and clear the hash table.
+
+## Error Handling
+
+- The library automatically handles errors for unknown flags and invalid values, providing appropriate messages to the user.
 
 ---
