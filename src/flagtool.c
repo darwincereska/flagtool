@@ -1,7 +1,7 @@
 /*
  *
  * FLAG TOOL MADE BY @darwincereska on GitHub
- * VERSION 1.0.2
+ * VERSION 1.0.3
  * https://github.com/darwincereska/flagtool
  *
  */
