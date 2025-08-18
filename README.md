@@ -1,4 +1,4 @@
-# flagtool
+# FlagTool
 
 A lightweight C library for parsing command-line flags with support for strings, booleans, and integers.
 
@@ -6,52 +6,53 @@ A lightweight C library for parsing command-line flags with support for strings,
 
 ## Features
 
-- Define flags with single or multiple names (e.g. `-help`, `h`)
-- Supports string, boolean, and integer flag types
-- Automatic parsing and value retrieval
-- Usage help printing
-- Error handling for unknown flags and invalid values
-- Memory management functions for freeing flags and cleaning up resources
+-  Define flags with single or multiple names (e.g., `-help`, `h`).
+-  Supports string, boolean, and integer flag types.
+-  Supports multi-instance flags for both strings and integers.
+-  Automatic parsing and value retrieval.
+-  Usage help printing.
+-  Error handling for unknown flags and invalid values.
+-  Memory management functions for freeing flags and cleaning up resources.
 
 ---
 
 ## Installation
 
-1. Clone or download the source.
+1. Clone or download the source:
 
-```bash
-git clone https://github.com/darwincereska/flagtool.git
-```
+    ```bash
+    git clone https://github.com/darwincereska/flagtool.git
+    ```
 
-1. Build the static library, test, and example programs.
+2. Build the static library, test, and example programs:
 
-```bash
-make
-```
+    ```bash
+    make
+    ```
 
-1. To build only the library
+3. To build only the library:
 
-```bash
-make lib
-```
+    ```bash
+    make lib
+    ```
 
-1. To clean the build files
+4. To clean the build files:
 
-```bash
-make clean
-```
+    ```bash
+    make clean
+    ```
 
 ---
 
 ## Usage
 
-Include the  `header` and link with the static library:
+Include the header and link with the static library:
 
 ```c
 #include "flagtool.h"
 ```
 
-Build your own program by linking with `libflagtool.a` built by the Makefile:
+Build your own program by linking with `libflagtool.a` built by the Makefile:
 
 ```bash
 gcc -o myprog myprog.c libflagtool.a
@@ -59,14 +60,16 @@ gcc -o myprog myprog.c libflagtool.a
 
 ---
 
-## Single-name flags
+## Example of Single-Name Flags
+
+Define and parse single-name flags:
 
 ```c
 #include "flagtool.h"
 
-Flag *flagHelp = flag_bool(0, "Show help message", "--help");
-Flag *flagName = flag_string("default", "Name to use", "--name");
-Flag *flagCount = flag_int(1, "Number of items", "--count");
+Flag *flagHelp = flag_bool(0, "Show help message", "--help", NULL);
+Flag *flagName = flag_string("default", "Name to use", "--name", NULL);
+Flag *flagCount = flag_int(1, "Number of items", "--count", NULL);
 
 int main(int argc, char *argv[]) {
     if (flag_parse(argc, argv) != 0) {
@@ -86,16 +89,18 @@ int main(int argc, char *argv[]) {
 }
 ```
 
-## Multi-name flags
+---
 
-You can define a flag with multiple names (aliases) using the variadic multi functions:
+## Example of Multi-Name Flags
+
+Define and parse multi-name flags:
 
 ```c
 #include "flagtool.h"
 
-Flag *flagVerbose = flag_bool_multi(0, "Enable verbose output", "--verbose", "-v", NULL);
-Flag *flagOutput = flag_string_multi("out.txt", "Output file", "--output", "-o", NULL);
-Flag *flagLevel = flag_int_multi(1, "Level of detail", "--level", "-l", NULL);
+Flag *flagVerbose = flag_bool(0, "Enable verbose output", "--verbose", "-v", NULL);
+Flag *flagOutput = flag_string("out.txt", "Output file", "--output", "-o", NULL);
+Flag *flagLevel = flag_int(1, "Level of detail", "--level", "-l", NULL);
 
 int main(int argc, char *argv[]) {
     if (flag_parse(argc, argv) != 0) {
@@ -113,29 +118,85 @@ int main(int argc, char *argv[]) {
 }
 ```
 
-<aside>
-❗
-
-**Note:** When using multi-name functions, pass the flag names as multiple string arguments ending with `NULL`.
-
-</aside>
+**IMPORTANT:** When using flag functions, end the function with `NULL`.
 
 ---
 
-## Example & Tests
+## Multi-Instance Flags
 
-- `make example` builds an example program using the library.
-- `make test` builds and runs tests.
+FlagTool supports defining flags that can accept multiple instances for both strings and integers. Use the following functions to retrieve the values:
+
+### Accessing Multi-Instance String Values
+
+For a string flag that allows multiple instances:
+
+```c
+#include "flagtool.h"
+
+Flag *flagNames = flag_string_multi(NULL, "List of names", "--name", "-n", NULL);
+
+int main(int argc, char *argv[]) {
+    if (flag_parse(argc, argv) != 0) {
+        print_flag_usage(argv[0]);
+        return 1;
+    }
+
+    const char **names = flag_get_string_multi(flagNames);
+    if (names) {
+        for (int i = 0; names[i] != NULL; i++) {
+            printf("Name[%d]: %s\n", i, names[i]);
+        }
+    }
+
+    return 0;
+}
+```
+
+### Accessing Multi-Instance Integer Values
+
+For an integer flag that allows multiple instances:
+
+```c
+#include "flagtool.h"
+
+Flag *flagNumbers = flag_int_multi(0, "List of numbers", "--number", "-num", NULL);
+
+int main(int argc, char *argv[]) {
+    if (flag_parse(argc, argv) != 0) {
+        print_flag_usage(argv[0]);
+        return 1;
+    }
+
+    const int *numbers = flag_get_int_multi(flagNumbers);
+    int count = flag_get_multiple_int_count(flagNumbers);
+    for (int i = 0; i < count; i++) {
+        printf("Number[%d]: %d\n", i, numbers[i]);
+    }
+
+    return 0;
+}
+```
+
+These functions allow you to collect and process multiple values set through command-line flags, accommodating both strings and integers in your application.
+
+---
+
+## Examples & Tests
+
+-  `make example` builds an example program using the library.
+-  `make test` builds and runs tests.
 
 ---
 
 ## Memory Management
 
-- Use `flag_free(Flag *flag)` to free a flag from memory.
-- Call `flags_cleanup()` to free all registered flags and clear the hash table.
+-  Use `flag_free(Flag *flag)` to free a flag from memory.
+-  Call `flags_cleanup()` to free all registered flags and clear the hash table.
+
+---
 
 ## Error Handling
 
-- The library automatically handles errors for unknown flags and invalid values, providing appropriate messages to the user.
+The library automatically handles errors for unknown flags and invalid values, providing appropriate messages to the user.
 
 ---

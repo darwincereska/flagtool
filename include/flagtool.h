@@ -6,14 +6,13 @@
 typedef struct Flag Flag;
 typedef struct FlagGroup FlagGroup;
 
-// Single-name flag creators (name last)
-Flag *flag_string(const char *default_val, const char *help, const char *name);
-Flag *flag_bool(int default_val, const char *help, const char *name);
-Flag *flag_int(int default_val, const char *help, const char *name);
+// flag creators (variadic, NULL-terminated names)
+Flag *flag_string(const char *default_val, const char *help, ...);
+Flag *flag_bool(int default_val, const char *help, ...);
+Flag *flag_int(int default_val, const char *help, ...);
 
-// Multi-name flag creators (variadic, NULL-terminated names)
-Flag *flag_string_multi(const char *default_val, const char *help, ...);
-Flag *flag_bool_multi(int default_val, const char *help, ...);
+// Multi-instance flag creators
+Flag *flag_string_multi(const char *default_val, const char *help,...);
 Flag *flag_int_multi(int default_val, const char *help, ...);
 
 Flag *flag_find(const char *name);
@@ -30,7 +29,9 @@ void flag_free_group(FlagGroup *group);
 const char *flag_get_string(Flag *flag);
 int flag_get_bool(Flag *flag);
 int flag_get_int(Flag *flag);
-
+const char **flag_get_string_multi(Flag *flag);
+const int *flag_get_int_multi(Flag *flag);
+int flag_get_multiple_int_count(Flag *flag);
 void print_flag_usage(const char *progname);
 
 #endif
