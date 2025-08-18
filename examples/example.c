@@ -10,6 +10,14 @@ int main(int argc, char *argv[]) {
     Flag *flagUser = flag_string_multi("guest", "Username", "--user", "-u", NULL);
     // Retries flag with multiple names, HAS TO END WITH NULL
     Flag *flagRetries = flag_int_multi(3, "Number of retries", "--retries", "-r", NULL);
+    
+    // Group example
+    FlagGroup *inputGroup = create_flag_group("Input Options");
+    add_flag_to_group(inputGroup, flagUser);
+    add_flag_to_group(inputGroup, flagRetries);
+    
+    FlagGroup *outputGroup = create_flag_group("Output Options");
+    add_flag_to_group(outputGroup, flagDebug);
 
     // Show flag usage
     if (flag_parse(argc, argv)) {

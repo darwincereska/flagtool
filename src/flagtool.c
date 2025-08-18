@@ -44,6 +44,7 @@ struct Flag {
     int name_count;                     // Number of names
     const char *help;                   // Help description
     FlagType type;                      // Type of the flag
+    FlagGroup *group;                   // Pointer to flag group
 
     const char *default_str;            // Default string value
     char *value_str;                    // Current string value
@@ -57,7 +58,17 @@ struct Flag {
     int is_set;                         // Flag indicating if the value is set
 };
 
+// Structure representing a flag group
+typedef struct FlagGroup {
+    const char *name; // Name of flag group
+    Flag **flags; // Flag in group
+    int flag_count; // Number of flags in group
+} FlagGroup;
+
 #define MAX_FLAGS 100
+#define MAX_GROUPS 20
+static FlagGroup *groups[MAX_GROUPS];
+static int group_count = 0;
 static Flag *flags[MAX_FLAGS]; // Array to store registered flags
 static int flag_count = 0;      // Count of registered flags
 
@@ -99,6 +110,52 @@ static Flag *create_flag(const char *names[], int name_count, const char *help, 
     add_flag_to_hash_table(f);
 
     return f;
+}
+
+// Function to create a flag group
+FlagGroup *create_flag_group(const char *name) {
+    // Check if we can add more groups
+    if (group_count >= MAX_GROUPS) {
+        fprintf(stderr, "Cannot create more groups, maximum limit reached\n");
+        exit(1);
+    }
+
+    // Allocate memory for the group
+    FlagGroup *group = malloc(sizeof(FlagGroup));
+    if (!group) {
+        perror("Failed to allocate memory for FlagGroup");
+        exit(1);
+    }
+
+    // Allocate memory for the group name and copy it
+    group->name = strdup(name);
+    if (!group->name) {
+        perror("Failed to allocate memory for group name");
+        free(group); // Free previously allocated memory
+        exit(1);
+    }
+
+    // Allocate memory for flags
+    group->flags = malloc(MAX_FLAGS * sizeof(Flag *));
+    if (!group->flags) {
+        perror("Failed to allocate memory for flags");
+        free(group);       // Free group
+        exit(1);
+    }
+
+    group->flag_count = 0;
+
+    // Automatically add the group to the global groups array
+    groups[group_count++] = group; // Add to global groups array
+
+    return group;
+}
+
+void add_flag_to_group(FlagGroup *group, Flag *flag) {
+    if (group->flag_count < MAX_FLAGS) {
+        group->flags[group->flag_count++] = flag;
+        flag->group = group; // Set group pointer to flag
+    }
 }
 
 // Function to collect names from variadic arguments
@@ -308,11 +365,22 @@ void flag_free(Flag *flag) {
     }
 }
 
+void flag_free_group(FlagGroup *group) {
+    if (group) {
+        free(group->flags);
+        free(group);
+    }
+}
+
 void flags_cleanup() {
     for (int i = 0; i < flag_count; i++) {
         flag_free(flags[i]);
     }
     flag_count = 0; // Reset the count
+    for (int n = 0; n < group_count; n++) {
+        flag_free_group(groups[n]);
+    }
+    group_count = 0;
     free_hash_table(); // Clear hash table
 }
 
@@ -348,26 +416,57 @@ int flag_get_int(Flag *flag) {
     return flag->value_int; // Return current integer value
 }
 
-// Function to print usage information for the flags
 void print_flag_usage(const char *progname) {
     printf("Usage: %s [flags]\nFlags:\n", progname);
-    for (int i = 0; i < flag_count; i++) { // Loop through registered flags
-        Flag *f = flags[i];
-        printf("  ");
-        for (int n = 0; n < f->name_count; n++) { // Print flag names
-            printf("%s", f->names[n]);
-            if (n + 1 < f->name_count) printf(", "); // Comma separation
+
+    // Loop through all groups and print their flags
+    for (int i = 0; i < group_count; i++) {
+        FlagGroup *group = groups[i];
+        printf("  %s:\n", group->name);
+        for (int j = 0; j < group->flag_count; j++) {
+            Flag *f = group->flags[j];
+            printf("    ");
+            for (int n = 0; n < f->name_count; n++) {
+                printf("%s", f->names[n]);
+                if (n + 1 < f->name_count) printf(", "); // Comma separation
+            }
+            // Print help based on type
+            switch (f->type) {
+                case TYPE_STRING:
+                    printf(" <string>\t%s (default: %s)\n", f->help, f->default_str ? f->default_str : "none");
+                    break;
+                case TYPE_BOOL:
+                    printf("\t%s (default: %s)\n", f->help, f->default_bool ? "true" : "false");
+                    break;
+                case TYPE_INT:
+                    printf(" <int>\t%s (default: %d)\n", f->help, f->default_int);
+                    break;
+            }
         }
-        switch (f->type) {
-        case TYPE_STRING:
-            printf(" <string>\t%s (default: %s)\n", f->help, f->default_str ? f->default_str : "none");
-            break;
-        case TYPE_BOOL:
-            printf("\t%s (default: %s)\n", f->help, f->default_bool ? "true" : "false");
-            break;
-        case TYPE_INT:
-            printf(" <int>\t%s (default: %d)\n", f->help, f->default_int);
-            break;
+    }
+
+    // Print ungrouped flags
+    printf("\nUngrouped Flags:\n");
+    for (int i = 0; i < flag_count; i++) {
+        Flag *f = flags[i];
+        if (f->group == NULL) { // Check if the flag is not part of any group
+            printf("    ");
+            for (int n = 0; n < f->name_count; n++) {
+                printf("%s", f->names[n]);
+                if (n + 1 < f->name_count) printf(", "); // Comma separation
+            }
+            // Print help based on type
+            switch (f->type) {
+                case TYPE_STRING:
+                    printf(" <string>\t%s (default: %s)\n", f->help, f->default_str ? f->default_str : "none");
+                    break;
+                case TYPE_BOOL:
+                    printf("\t%s (default: %s)\n", f->help, f->default_bool ? "true" : "false");
+                    break;
+                case TYPE_INT:
+                    printf(" <int>\t%s (default: %d)\n", f->help, f->default_int);
+                    break;
+            }
         }
     }
 }
