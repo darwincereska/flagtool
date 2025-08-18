@@ -19,6 +19,7 @@ typedef enum { TYPE_STRING, TYPE_BOOL, TYPE_INT } FlagType;
 // Constants for hash table and maximum flag names
 #define HASH_TABLE_SIZE 256
 #define MAX_FLAG_NAMES 10
+#define MAX_FLAG_INSTANCES 64
 
 // Structure for hash table nodes
 typedef struct HashNode {
@@ -40,7 +41,7 @@ unsigned int hash(const char *str) {
 
 // Structure representing a flag
 struct Flag {
-    const char *names[MAX_FLAG_NAMES]; // Array of flag names
+    const char *names[MAX_FLAG_NAMES];  // Array of flag names
     int name_count;                     // Number of names
     const char *help;                   // Help description
     FlagType type;                      // Type of the flag
@@ -48,13 +49,17 @@ struct Flag {
 
     const char *default_str;            // Default string value
     char *value_str;                    // Current string value
+    char *multiple_str_values[MAX_FLAG_INSTANCES]; // Store string values
 
     int default_bool;                   // Default boolean value
     int value_bool;                     // Current boolean value
 
     int default_int;                    // Default integer value
     int value_int;                      // Current integer value
-
+    int multiple_int_values[MAX_FLAG_INSTANCES - 1]; // Stores int values (no NULL for int)
+    
+    int multiple_values_count;          // Number of multi values
+    int supports_multiple;              // Flag to indicate if multiple instances allowed
     int is_set;                         // Flag indicating if the value is set
 };
 
@@ -169,38 +174,8 @@ static int collect_names(va_list args, const char *names[], int max_names) {
     return count; // Return the number of names collected
 }
 
-// Function to create a string flag (single name)
-Flag *flag_string(const char *default_val, const char *help, const char *name) {
-    const char *names[1] = {name};
-    Flag *f = create_flag(names, 1, help, TYPE_STRING);
-    f->default_str = default_val;
-    f->value_str = NULL;
-    f->is_set = 0;
-    return f;
-}
-
-// Function to create a boolean flag (single name)
-Flag *flag_bool(int default_val, const char *help, const char *name) {
-    const char *names[1] = {name};
-    Flag *f = create_flag(names, 1, help, TYPE_BOOL);
-    f->default_bool = default_val;
-    f->value_bool = default_val;
-    f->is_set = 0;
-    return f;
-}
-
-// Function to create an integer flag (single name)
-Flag *flag_int(int default_val, const char *help, const char *name) {
-    const char *names[1] = {name};
-    Flag *f = create_flag(names, 1, help, TYPE_INT);
-    f->default_int = default_val;
-    f->value_int = default_val;
-    f->is_set = 0;
-    return f;
-}
-
 // Function to create a string flag (multiple names)
-Flag *flag_string_multi(const char *default_val, const char *help, ...) {
+Flag *flag_string(const char *default_val, const char *help, ...) {
     const char *names[MAX_FLAG_NAMES];
     va_list args;
     va_start(args, help);
@@ -215,7 +190,7 @@ Flag *flag_string_multi(const char *default_val, const char *help, ...) {
 }
 
 // Function to create a boolean flag (multiple names)
-Flag *flag_bool_multi(int default_val, const char *help, ...) {
+Flag *flag_bool(int default_val, const char *help, ...) {
     const char *names[MAX_FLAG_NAMES];
     va_list args;
     va_start(args, help);
@@ -230,7 +205,7 @@ Flag *flag_bool_multi(int default_val, const char *help, ...) {
 }
 
 // Function to create an integer flag (multiple names)
-Flag *flag_int_multi(int default_val, const char *help, ...) {
+Flag *flag_int(int default_val, const char *help, ...) {
     const char *names[MAX_FLAG_NAMES];
     va_list args;
     va_start(args, help);
@@ -244,36 +219,87 @@ Flag *flag_int_multi(int default_val, const char *help, ...) {
     return f;
 }
 
-static int set_flag_value(Flag *f, const char *val, int is_negative_bool) {
-    if (f->type == TYPE_BOOL) {
-        f->value_bool = is_negative_bool ? 0 : 1; // Set boolean value based on negation
-        f->is_set = 1; // Mark the flag as set
-        return 0; // Success
-    }
-    if (!val) {
-        fprintf(stderr, "Missing value for flag %s\n", f->names[0]); // Error if value is missing
-        return 1; // Error
-    }
-    if (f->type == TYPE_STRING) {
-        free(f->value_str); // Free previous string value
-        f->value_str = strdup(val); // Duplicate the new string value
-        if (!f->value_str) {
-            perror("strdup"); // Handle memory allocation failure
-            return 1; // Error
-        }
-        f->is_set = 1; // Mark the flag as set
-    } else if (f->type == TYPE_INT) {
-        char *endptr;
-        long v = strtol(val, &endptr, 10); // Convert string to long
-        if (*endptr != '\0') {
-            fprintf(stderr, "Invalid integer for flag %s: %s\n", f->names[0], val); // Error if conversion fails
-            return 1; // Error
-        }
-        f->value_int = (int)v; // Set the integer value
-        f->is_set = 1; // Mark the flag as set
-    }
-    return 0; // Success
+// Function to create string flag (multiple names and instances)
+Flag *flag_string_multi(const char *default_val, const char *help, ...) {
+    const char *names[MAX_FLAG_NAMES];
+    va_list args;
+    va_start(args, help);
+    int count = collect_names(args, names, MAX_FLAG_NAMES); // Collect names
+    va_end(args);
+
+    Flag *f = create_flag(names, count, help, TYPE_STRING);
+    f->default_str = default_val;
+    f->value_str = NULL;
+    f->is_set = 0;
+    f->supports_multiple = 1;
+    f->multiple_values_count = 0;
+    return f;
 }
+
+// Function to create int flag (multiple names and instances)
+Flag *flag_int_multi(int default_val, const char *help, ...) {
+    const char *names[MAX_FLAG_NAMES];
+    va_list args;
+    va_start(args, help);
+    int count = collect_names(args, names, MAX_FLAG_NAMES); // Collect names
+    va_end(args);
+
+    Flag *f = create_flag(names, count, help, TYPE_INT);
+    f->default_int = default_val;
+    f->value_int = default_val;
+    f->is_set = 0;
+    f->supports_multiple = 1;
+    f->multiple_values_count = 0;
+    return f;
+}
+
+static int set_flag_value(Flag *f, const char *val, int is_negative_bool) {
+    if (!f) return 1;
+
+    if (f->type == TYPE_BOOL) {
+        f->value_bool = is_negative_bool ? 0 : 1;
+        f->is_set = 1;
+        return 0;
+    }
+
+    if (!val && f->type != TYPE_BOOL) {
+        fprintf(stderr, "Missing value for flag %s\n", f->names[0]);
+        return 1;
+    }
+
+    if (f->supports_multiple) {
+        if (f->multiple_values_count < MAX_FLAG_INSTANCES - 1) {
+            if (f->type == TYPE_STRING) {
+                f->multiple_str_values[f->multiple_values_count++] = strdup(val);
+                f->multiple_str_values[f->multiple_values_count] = NULL;
+                return 0;
+            } else if (f->type == TYPE_INT) {
+                char *endptr;
+                long v = strtol(val, &endptr, 10);
+                if (*endptr != '\0') return 1; // Error
+                f->multiple_int_values[f->multiple_values_count++] = (int)v;
+                return 0;
+            }
+        }
+    } else {
+        // Single-instance setting
+        if (f->type == TYPE_STRING) {
+            if (f->value_str) free(f->value_str);
+            f->value_str = strdup(val);
+            if (!f->value_str) return 1;
+            f->is_set = 1;
+        } else if (f->type == TYPE_INT) {
+            char *endptr;
+            long v = strtol(val, &endptr, 10);
+            if (*endptr != '\0') return 1; // Error
+            f->value_int = (int)v;
+            f->is_set = 1;
+        }
+    }
+
+    return 0;
+}
+
 
 /**
  * flag_parse - Parses command-line arguments and updates registered flags.
@@ -295,52 +321,52 @@ static int set_flag_value(Flag *f, const char *val, int is_negative_bool) {
  *   0 on success
  *   non-zero on error
  */
-
-int flag_parse(int argc, char *argv[]) {
-    for (int i = 1; i < argc; i++) { // Loop through each argument
-        const char *original_arg = argv[i];
-        char *value_from_equal = NULL;
-        int is_negative_bool = 0;
-
-        // Make a safe copy for matching
-        char argbuf[256];
-        strncpy(argbuf, original_arg, sizeof(argbuf) - 1);
-        argbuf[sizeof(argbuf) - 1] = '\0';
-
-        // Detect --no-flag for booleans
-        if (strncmp(argbuf, "--no-", 5) == 0) {
-            is_negative_bool = 1; // Set flag for negative boolean
-            memmove(argbuf + 2, argbuf + 5, strlen(argbuf + 5) + 1); // Remove "no-"
-        }
-
-        // Check for --flag=value form
-        char *eq = strchr(argbuf, '=');
-        if (eq) {
-            *eq = '\0'; // Split the argument at '='
-            value_from_equal = eq + 1; // Get the value part
-        }
-
-        // Use the hash table to find the flag
-        Flag *f = flag_find(argbuf);
-        if (f) {
-            const char *val = value_from_equal;
-            if (!val && f->type != TYPE_BOOL) {
-                if (i + 1 >= argc) {
-                    fprintf(stderr, "Missing value for flag %s\n", f->names[0]);
-                    return 1;
-                }
-                val = argv[++i]; // Get the next argument as value
-            }
-            if (set_flag_value(f, val, is_negative_bool) != 0) {
-                return 1; // Error setting value
-            }
-        } else {
-            fprintf(stderr, "Unknown flag: %s\n", original_arg);
-            return 1; // Return error for unknown flag
-        }
-    }
-    return 0; // Success
-}
+ 
+ int flag_parse(int argc, char *argv[]) {
+     for (int i = 1; i < argc; i++) { // Loop through each argument
+         const char *original_arg = argv[i];
+         char *value_from_equal = NULL;
+         int is_negative_bool = 0;
+ 
+         // Make a safe copy for matching
+         char argbuf[256];
+         strncpy(argbuf, original_arg, sizeof(argbuf) - 1);
+         argbuf[sizeof(argbuf) - 1] = '\0';
+ 
+         // Detect --no-flag for booleans
+         if (strncmp(argbuf, "--no-", 5) == 0) {
+             is_negative_bool = 1;
+             memmove(argbuf + 2, argbuf + 5, strlen(argbuf + 5) + 1); // Remove "no-"
+         }
+ 
+         // Check for --flag=value form
+         char *eq = strchr(argbuf, '=');
+         if (eq) {
+             *eq = '\0'; // Split the argument at '='
+             value_from_equal = eq + 1;
+         }
+ 
+         // Use the hash table to find the flag
+         Flag *f = flag_find(argbuf);
+         if (f) {
+             const char *val = value_from_equal;
+             if (!val && f->type != TYPE_BOOL) {
+                 if (i + 1 >= argc) {
+                     fprintf(stderr, "Missing value for flag %s\n", f->names[0]);
+                     return 1;
+                 }
+                 val = argv[++i]; // Get the next argument as value
+             }
+             if (set_flag_value(f, val, is_negative_bool) != 0) {
+                 return 1; // Error setting value
+             }
+         } else {
+             fprintf(stderr, "Unknown flag: %s\n", original_arg);
+             return 1; // Return error for unknown flag
+         }
+     }
+     return 0; // Success
+ }
 
 // Function to find a flag by name in the hash table
 Flag *flag_find(const char *name) {
@@ -414,6 +440,22 @@ int flag_get_bool(Flag *flag) {
 int flag_get_int(Flag *flag) {
     if (flag->type != TYPE_INT) return 0; // Check type
     return flag->value_int; // Return current integer value
+}
+
+// Function to get the string values from a multi-instance flag
+const char **flag_get_string_multi(Flag *flag) {
+    if (flag->type != TYPE_STRING || !flag->supports_multiple) return NULL;
+    return (const char **)flag->multiple_str_values;
+}
+
+const int *flag_get_int_multi(Flag *flag) {
+    if (flag->type != TYPE_INT || !flag->supports_multiple) return NULL;
+    return flag->multiple_int_values;
+}
+
+int flag_get_multiple_int_count(Flag *flag) {
+    if (flag->type != TYPE_INT || !flag->supports_multiple) return 0;
+    return flag->multiple_values_count;
 }
 
 void print_flag_usage(const char *progname) {
