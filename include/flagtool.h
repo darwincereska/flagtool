@@ -15,7 +15,6 @@ Flag *flag_int(int default_val, const char *help, ...);
 Flag *flag_string_multi(const char *default_val, const char *help,...);
 Flag *flag_int_multi(int default_val, const char *help, ...);
 
-Flag *flag_find(const char *name);
 void flag_free(Flag *flag);
 void free_hash_table();
 void flags_cleanup();
